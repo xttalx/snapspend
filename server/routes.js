@@ -2,7 +2,7 @@ const express = require('express');
 const store = require('./store');
 const { signToken, verifySupabaseToken, resolveUserId, isSupabaseAuth } = require('./auth');
 const { isConfigured } = require('./supabase');
-const { supabaseUrl, supabaseAnonKey } = require('./env');
+const { supabaseUrl, supabaseAnonKey, describeClientKey } = require('./env');
 const { homeChatReply, askChatReply, mockScanReceipt } = require('./services/chat');
 const anthropic = require('./services/anthropic');
 
@@ -42,15 +42,19 @@ router.get('/auth/config', (_req, res) => {
   const url = supabaseUrl();
   const anonKey = supabaseAnonKey();
   const serverOk = isConfigured();
+  const keyInfo = describeClientKey(anonKey);
+  let hint = keyInfo.hint;
+  if (serverOk && !anonKey) {
+    hint = 'Set SUPABASE_ANON_KEY (legacy anon JWT, eyJ…) in Vercel env vars';
+  } else if (!serverOk) {
+    hint = 'Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in Vercel env vars';
+  }
   res.json({
     supabase: !!(url && anonKey && serverOk),
     supabaseUrl: url || null,
     supabaseAnonKey: anonKey || null,
-    hint: serverOk && !anonKey
-      ? 'Set VITE_SUPABASE_ANON_KEY (anon/public key) in Vercel env vars'
-      : !serverOk
-        ? 'Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in Vercel env vars'
-        : null,
+    anonKeyFormat: keyInfo.format,
+    hint,
   });
 });
 

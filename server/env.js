@@ -25,16 +25,40 @@ function supabaseServiceRoleKey() {
 }
 
 function supabaseAnonKey() {
+  // Legacy JWT anon (eyJ…) — most reliable for browser OAuth/sign-in
+  const legacy = first('SUPABASE_ANON_KEY', 'VITE_SUPABASE_ANON_KEY_LEGACY');
+  if (legacy.startsWith('eyJ')) return legacy;
   return first(
     'VITE_SUPABASE_ANON_KEY',
     'REACT_APP_SUPABASE_PUBLISHABLE_KEY',
-    'SUPABASE_ANON_KEY',
     'SUPABASE_PUBLISHABLE_KEY',
   );
+}
+
+function describeClientKey(key) {
+  if (!key) {
+    return {
+      format: 'missing',
+      hint: 'Set SUPABASE_ANON_KEY (legacy anon JWT) or VITE_SUPABASE_ANON_KEY in Vercel.',
+    };
+  }
+  if (key.startsWith('eyJ')) return { format: 'legacy-jwt', hint: null };
+  if (key.startsWith('sb_publishable_')) {
+    return {
+      format: 'publishable',
+      hint:
+        'If sign-in shows "Invalid API key", use the legacy anon key instead: Supabase → Project Settings → API → anon public (starts with eyJ).',
+    };
+  }
+  return {
+    format: 'unknown',
+    hint: 'Anon key should be the legacy anon JWT (eyJ…) or publishable key (sb_publishable_…).',
+  };
 }
 
 module.exports = {
   supabaseUrl,
   supabaseServiceRoleKey,
   supabaseAnonKey,
+  describeClientKey,
 };
