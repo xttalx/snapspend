@@ -1,10 +1,11 @@
 const jwt = require('jsonwebtoken');
+const { getSupabase, isConfigured } = require('./supabase');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'dev-only-change-in-production';
-const EXPIRES_IN = process.env.JWT_EXPIRES_IN || '30d';
+const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '30d';
 
 function signToken(userId) {
-  return jwt.sign({ sub: userId }, JWT_SECRET, { expiresIn: EXPIRES_IN });
+  return jwt.sign({ sub: userId }, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
 }
 
 function verifyToken(token) {
@@ -16,4 +17,27 @@ function verifyToken(token) {
   }
 }
 
-module.exports = { signToken, verifyToken };
+/** Verify Supabase access token; returns auth user or null */
+async function verifySupabaseToken(token) {
+  if (!isConfigured() || !token) return null;
+  const sb = getSupabase();
+  const { data: { user }, error } = await sb.auth.getUser(token);
+  if (error || !user) return null;
+  return user;
+}
+
+async function resolveUserId(token) {
+  if (isConfigured()) {
+    const user = await verifySupabaseToken(token);
+    return user?.id || null;
+  }
+  return verifyToken(token);
+}
+
+module.exports = {
+  signToken,
+  verifyToken,
+  verifySupabaseToken,
+  resolveUserId,
+  isSupabaseAuth: isConfigured,
+};

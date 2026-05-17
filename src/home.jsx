@@ -3,11 +3,6 @@ import { SnapAPI } from './api/client';
 import { Snap, SnapWordmark, Avatar, I, Phone, Dock } from './mascot';
 
 
-const SAMPLE_CHAT = [
-  { kind: 'ai', text: "Hey Alex 👋  Ready to log today's spending?", mood: 'happy' },
-  { kind: 'ai', text: "Just tell me what you spent — receipt, mileage, anything.", mood: 'happy' },
-];
-
 const QUICK_PROMPTS = [
   "$24 lunch with client",
   "Drove to airport",
@@ -70,19 +65,12 @@ export function aiReply(input) {
 // ─────────────────────────────────────────────────────────────
 // HomeScreen — variant: 'chat' | 'hybrid' | 'dock'
 // ─────────────────────────────────────────────────────────────
-export function HomeScreen({ variant = 'hybrid', onNav, userName = 'Alex' }) {
+export function HomeScreen({ variant = 'hybrid', onNav, userName = 'there' }) {
   const [taxSummary, setTaxSummary] = React.useState(null);
-  const [messages, setMessages] = React.useState(() => {
-    if (variant === 'chat') {
-      return [
-        { kind: 'ai', mood: 'happy', text: `Hey ${userName}! 👋` },
-        { kind: 'ai', mood: 'happy', text: "I'm Snap. What did you spend today? Tell me in your own words — I'll handle the tax stuff." },
-      ];
-    }
-    return [
-      { kind: 'ai', mood: 'happy', text: `Hey ${userName}! Ready to log something?` },
-    ];
-  });
+  const [messages, setMessages] = React.useState(() => [
+    { kind: 'ai', mood: 'happy', text: `Hey ${userName}! 👋 Your account is fresh — no spending logged yet.` },
+    { kind: 'ai', mood: 'happy', text: "Tell me what you spent (receipt, mileage, anything) and I'll save it for your taxes." },
+  ]);
   const [draft, setDraft] = React.useState('');
   const [typing, setTyping] = React.useState(false);
   const scrollerRef = React.useRef(null);
@@ -167,22 +155,24 @@ export function HomeScreen({ variant = 'hybrid', onNav, userName = 'Alex' }) {
           <div className="card card--dark" style={{ borderRadius: 18 }} onClick={() => onNav && onNav('taxes')}>
             <div className="row row--between" style={{ alignItems: 'flex-start' }}>
               <div>
-                <div className="card__label">Current tax estimate</div>
-                <div className="amt" style={{ fontSize: 32, marginTop: 4 }}>${(taxSummary?.federalEstimate ?? 14500).toLocaleString()}</div>
+                <div className="card__label">
+                  {taxSummary?.isEmpty ? 'Start logging to see estimates' : 'Current tax estimate'}
+                </div>
+                <div className="amt" style={{ fontSize: 32, marginTop: 4 }}>${(taxSummary?.federalEstimate ?? 0).toLocaleString()}</div>
               </div>
               <div className="chip chip--mint" style={{ fontSize: 11, padding: '4px 10px' }}>
-                <I.trend /> ${(taxSummary?.taxSaved ?? 2850).toLocaleString()} saved
+                <I.trend /> ${(taxSummary?.taxSaved ?? 0).toLocaleString()} saved
               </div>
             </div>
             <div className="row" style={{ marginTop: 12, gap: 14 }}>
               <div style={{ flex: 1 }}>
                 <div className="tiny" style={{ color: 'rgba(255,255,255,.6)' }}>Liability</div>
-                <div className="amt" style={{ fontSize: 14 }}>${(taxSummary?.federalEstimate ?? 14500).toLocaleString()}</div>
+                <div className="amt" style={{ fontSize: 14 }}>${(taxSummary?.federalEstimate ?? 0).toLocaleString()}</div>
               </div>
               <div style={{ width: 1, height: 28, background: 'rgba(255,255,255,.15)' }} />
               <div style={{ flex: 1 }}>
                 <div className="tiny" style={{ color: 'rgba(255,255,255,.6)' }}>Write-offs</div>
-                <div className="amt" style={{ fontSize: 14, color: '#3ddc97' }}>${(taxSummary?.writeOffs ?? 2850).toLocaleString()}</div>
+                <div className="amt" style={{ fontSize: 14, color: '#3ddc97' }}>${(taxSummary?.writeOffs ?? 0).toLocaleString()}</div>
               </div>
             </div>
           </div>
@@ -197,8 +187,8 @@ export function HomeScreen({ variant = 'hybrid', onNav, userName = 'Alex' }) {
           }}>
             <I.spark style={{ color: '#16b977' }} />
             <div style={{ flex: 1 }}>
-              <div style={{ fontWeight: 600, fontSize: 13.5 }}>You've saved <span className="amt">${(taxSummary?.writeOffs ?? 2850).toLocaleString()}</span> in write-offs</div>
-              <div className="tiny muted">{taxSummary?.organizedPct ?? 90}% organized · keep going!</div>
+              <div style={{ fontWeight: 600, fontSize: 13.5 }}>You've saved <span className="amt">${(taxSummary?.writeOffs ?? 0).toLocaleString()}</span> in write-offs</div>
+              <div className="tiny muted">{taxSummary?.organizedPct ?? 0}% organized · keep going!</div>
             </div>
             <I.chev />
           </div>

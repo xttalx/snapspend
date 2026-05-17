@@ -6,31 +6,11 @@ const DB_PATH = path.join(__dirname, '..', 'data.json');
 const MILE_RATE = 0.67;
 
 function seed() {
-  const now = new Date().toISOString();
   return {
-    users: [{
-      id: 'user-1',
-      name: 'Alex',
-      email: 'alex@example.com',
-      employment: '1099',
-      industry: 'Creator/Photographer',
-      state: 'California',
-      deductions: ['camera', 'software', 'office'],
-      createdAt: now,
-    }],
-    expenses: [
-      { id: uuid(), userId: 'user-1', vendor: 'Staples', category: 'Office supplies', amount: 62.8, deductible: true, type: 'receipt', date: '2026-03-24', createdAt: now },
-      { id: uuid(), userId: 'user-1', vendor: 'Adobe Sub', category: 'Software', amount: 20.99, deductible: true, type: 'subscription', date: '2026-03-24', createdAt: now },
-      { id: uuid(), userId: 'user-1', vendor: 'Client lunch', category: 'Meals (50%)', amount: 45, deductible: true, type: 'meal', date: '2026-03-23', createdAt: now },
-      { id: uuid(), userId: 'user-1', vendor: 'SFO drive', category: 'Mileage', amount: 12.32, deductible: true, type: 'mileage', date: '2026-03-23', createdAt: now },
-      { id: uuid(), userId: 'user-1', vendor: 'Coffee', category: 'Personal', amount: 5.4, deductible: false, type: 'other', date: '2026-03-22', createdAt: now },
-    ],
-    mileageTrips: [
-      { id: uuid(), userId: 'user-1', from: 'Home', to: 'Airport (SFO)', miles: 18.4, durationMin: 24, purpose: 'Client meeting', status: 'active', date: '2026-03-24', createdAt: now },
-    ],
-    notifications: [
-      { id: uuid(), userId: 'user-1', mood: 'wow', title: "You're $340 from your savings goal!", sub: 'Tap to see how', time: '2m', read: false, mint: true },
-    ],
+    users: [],
+    expenses: [],
+    mileageTrips: [],
+    notifications: [],
     chatHistory: [],
   };
 }
@@ -78,24 +58,45 @@ async function findUser(userId) {
   return mapUser(cache.users.find((u) => u.id === userId));
 }
 
-async function findOrCreateUser({ provider, name, email }) {
-  let user = email ? cache.users.find((u) => u.email === email) : cache.users[0];
+async function ensureProfile(authUser) {
+  const id = authUser.id || uuid();
+  let user = cache.users.find((u) => u.id === id);
   if (!user) {
+    const email = authUser.email || `${id}@local.dev`;
     user = {
-      id: uuid(),
-      name: name || 'Alex',
-      email: email || `${provider}@snapspend.local`,
+      id,
+      name: authUser.user_metadata?.full_name || authUser.user_metadata?.name || email.split('@')[0],
+      email,
       employment: '1099',
       industry: 'Creator/Photographer',
       state: 'California',
-      deductions: ['camera', 'software', 'office'],
+      deductions: [],
       createdAt: new Date().toISOString(),
     };
     cache.users.push(user);
     persist();
-  } else {
-    if (name) user.name = name;
-    if (email) user.email = email;
+  }
+  return mapUser(user);
+}
+
+async function findOrCreateUser({ provider, name, email }) {
+  const loginEmail = email || `${provider}-${Date.now()}@snapspend.local`;
+  let user = cache.users.find((u) => u.email === loginEmail);
+  if (!user) {
+    user = {
+      id: uuid(),
+      name: name || loginEmail.split('@')[0],
+      email: loginEmail,
+      employment: '1099',
+      industry: 'Creator/Photographer',
+      state: 'California',
+      deductions: [],
+      createdAt: new Date().toISOString(),
+    };
+    cache.users.push(user);
+    persist();
+  } else if (name) {
+    user.name = name;
     persist();
   }
   return mapUser(user);
@@ -260,7 +261,6 @@ function computeTaxSummary(userId) {
     if (e.category.includes('Meal')) return s + e.amount * 0.5;
     return s + e.amount;
   }, 0);
-  const liability = Math.max(12000, Math.round(14500 - writeOffs * 0.22));
   const saved = Math.round(writeOffs * 0.22);
   const breakdown = {};
   for (const e of expenses) {
@@ -271,14 +271,16 @@ function computeTaxSummary(userId) {
   const breakdownList = Object.entries(breakdown)
     .map(([cat, amt]) => ({ cat, amt: Math.round(amt) }))
     .sort((a, b) => b.amt - a.amt);
-  const organizedPct = Math.min(99, 70 + Math.floor(expenses.length * 2));
+  const count = expenses.length;
+  const organizedPct = count === 0 ? 0 : Math.min(99, 70 + Math.floor(count * 2));
   return {
-    federalEstimate: liability,
+    federalEstimate: count === 0 ? 0 : Math.max(0, Math.round(14500 - writeOffs * 0.22)),
     writeOffs: Math.round(writeOffs),
     taxSaved: saved,
     organizedPct,
-    greyFlags: 5,
+    greyFlags: count === 0 ? 0 : Math.min(5, Math.max(1, 5 - Math.floor(count / 3))),
     breakdown: breakdownList,
+    isEmpty: count === 0,
   };
 }
 
@@ -310,6 +312,7 @@ module.exports = {
   MILE_RATE,
   formatExpenseDate,
   findUser,
+  ensureProfile,
   findOrCreateUser,
   updateProfile,
   getExpenses,

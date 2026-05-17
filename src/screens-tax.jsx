@@ -246,6 +246,18 @@ export function ProfileScreen({ onNav }) {
         >
           {saving ? 'Saving…' : 'Save profile'}
         </button>
+
+        <button
+          className="btn btn--block"
+          style={{ marginTop: 10, background: 'transparent', color: '#c44', fontWeight: 600 }}
+          onClick={async () => {
+            await SnapAPI.logout();
+            showToast('Signed out');
+            onNav('login');
+          }}
+        >
+          Sign out
+        </button>
       </div>
     </>
   );
@@ -286,10 +298,10 @@ export function TaxesScreen({ onNav }) {
         {/* Big number */}
         <div className="card card--dark" style={{ padding: 20, borderRadius: 18 }}>
           <div className="card__label">2025 federal estimate</div>
-          <div className="amt" style={{ fontSize: 44, marginTop: 6 }}>${(tax?.federalEstimate ?? 14500).toLocaleString()}</div>
+          <div className="amt" style={{ fontSize: 44, marginTop: 6 }}>${(tax?.federalEstimate ?? 0).toLocaleString()}</div>
           <div className="row" style={{ marginTop: 4, gap: 8 }}>
             <span className="chip chip--mint" style={{ padding: '4px 10px' }}>
-              <I.trend /> ${(tax?.writeOffs ?? 2850).toLocaleString()} in write-offs
+              <I.trend /> ${(tax?.writeOffs ?? 0).toLocaleString()} in write-offs
             </span>
           </div>
           <div style={{ marginTop: 14 }}>
@@ -462,7 +474,7 @@ export function ExportScreen({ onNav }) {
 
         <div className="row row--between" style={{ marginTop: 18, padding: '0 4px' }}>
           <span className="muted">Final estimate</span>
-          <span className="amt" style={{ fontSize: 18 }}>${(tax?.federalEstimate ?? 14500).toLocaleString()}</span>
+          <span className="amt" style={{ fontSize: 18 }}>${(tax?.federalEstimate ?? 0).toLocaleString()}</span>
         </div>
 
         <button

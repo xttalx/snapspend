@@ -1,20 +1,29 @@
 const express = require('express');
 const store = require('./store');
-const { signToken, verifyToken } = require('./auth');
+const { signToken, verifySupabaseToken, resolveUserId, isSupabaseAuth } = require('./auth');
 const { isConfigured } = require('./supabase');
 const { homeChatReply, askChatReply, mockScanReceipt } = require('./services/chat');
 const anthropic = require('./services/anthropic');
 
 const router = express.Router();
 
-function auth(req, res, next) {
+function bearerToken(req) {
   const header = req.headers.authorization || '';
-  const token = header.startsWith('Bearer ') ? header.slice(7) : null;
+  return header.startsWith('Bearer ') ? header.slice(7) : null;
+}
+
+async function auth(req, res, next) {
+  const token = bearerToken(req);
   if (!token) return res.status(401).json({ error: 'Unauthorized' });
-  const userId = verifyToken(token);
-  if (!userId) return res.status(401).json({ error: 'Invalid or expired token' });
-  req.userId = userId;
-  next();
+  try {
+    const userId = await resolveUserId(token);
+    if (!userId) return res.status(401).json({ error: 'Invalid or expired token' });
+    req.userId = userId;
+    next();
+  } catch (e) {
+    console.error('auth', e);
+    res.status(401).json({ error: 'Unauthorized' });
+  }
 }
 
 router.get('/health', (_req, res) => {
@@ -22,13 +31,44 @@ router.get('/health', (_req, res) => {
     ok: true,
     service: 'snapspend-api',
     database: isConfigured() ? 'supabase' : 'json',
+    auth: isSupabaseAuth() ? 'supabase' : 'jwt',
     ai: anthropic.isConfigured() ? `anthropic (${anthropic.getModel()})` : 'rules-only',
   });
 });
 
+router.get('/auth/config', (_req, res) => {
+  const url = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || '';
+  const anonKey = process.env.VITE_SUPABASE_ANON_KEY || '';
+  res.json({
+    supabase: !!(url && anonKey && isConfigured()),
+    supabaseUrl: url || null,
+    supabaseAnonKey: anonKey || null,
+  });
+});
+
+router.post('/auth/session', async (req, res) => {
+  try {
+    if (!isConfigured()) {
+      return res.status(400).json({ error: 'Supabase not configured' });
+    }
+    const token = bearerToken(req);
+    const authUser = await verifySupabaseToken(token);
+    if (!authUser) return res.status(401).json({ error: 'Invalid session' });
+    const user = await store.ensureProfile(authUser);
+    res.json({ user });
+  } catch (e) {
+    console.error('session', e);
+    res.status(500).json({ error: e.message || 'Session failed' });
+  }
+});
+
+/** Local dev only — when Supabase env vars are not set */
 router.post('/auth/login', async (req, res) => {
   try {
-    const { provider = 'demo', name, email } = req.body || {};
+    if (isConfigured()) {
+      return res.status(400).json({ error: 'Use the app sign-in (Supabase Auth)' });
+    }
+    const { provider = 'email', name, email } = req.body || {};
     const user = await store.findOrCreateUser({ provider, name, email });
     const token = signToken(user.id);
     res.json({ token, user: { id: user.id, name: user.name, email: user.email }, provider });

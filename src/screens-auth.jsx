@@ -1,20 +1,87 @@
 import React from 'react';
 import { SnapAPI, showToast } from './api/client';
+import { getSupabase } from './lib/supabase';
 import { Snap, Avatar, AppBar, I } from './mascot';
 
-
-export function LoginScreen({ onNav }) {
+export function LoginScreen({ onNav, onSignedIn }) {
   const [loading, setLoading] = React.useState(null);
+  const [showEmail, setShowEmail] = React.useState(false);
+  const [mode, setMode] = React.useState('signin');
+  const [email, setEmail] = React.useState('');
+  const [password, setPassword] = React.useState('');
+  const [devMode, setDevMode] = React.useState(false);
 
-  const signIn = async (provider) => {
-    setLoading(provider);
+  React.useEffect(() => {
+    SnapAPI.getAuthConfig().then((cfg) => {
+      setDevMode(!cfg.supabase);
+    });
+  }, []);
+
+  const finishSignIn = async () => {
+    const { user } = await SnapAPI.syncSession();
+    showToast(`Welcome, ${user.name.split(' ')[0]}!`);
+    if (onSignedIn) onSignedIn(user);
+    else onNav('home');
+  };
+
+  const signInGoogle = async () => {
+    const sb = getSupabase();
+    if (!sb) {
+      showToast('Google sign-in is not configured yet');
+      return;
+    }
+    setLoading('google');
     try {
-      await SnapAPI.login({ provider });
-      showToast(`Signed in with ${provider}`);
-      onNav('home');
+      const { error } = await sb.auth.signInWithOAuth({
+        provider: 'google',
+        options: { redirectTo: window.location.origin },
+      });
+      if (error) throw error;
     } catch (e) {
-      showToast(e.message || 'Sign-in failed');
-      onNav('home');
+      showToast(e.message || 'Google sign-in failed');
+      setLoading(null);
+    }
+  };
+
+  const submitEmail = async (e) => {
+    e.preventDefault();
+    const sb = getSupabase();
+    if (!sb) {
+      setLoading('email');
+      try {
+        const { user } = await SnapAPI.login({ provider: 'email', email, name: email.split('@')[0] });
+        if (onSignedIn) onSignedIn(user);
+        else onNav('home');
+      } catch (err) {
+        showToast(err.message || 'Sign-in failed');
+      } finally {
+        setLoading(null);
+      }
+      return;
+    }
+
+    if (!email.trim() || !password) {
+      showToast('Enter email and password');
+      return;
+    }
+
+    setLoading('email');
+    try {
+      if (mode === 'signup') {
+        const { error } = await sb.auth.signUp({ email: email.trim(), password });
+        if (error) throw error;
+        showToast('Check your email to confirm your account, then sign in.');
+        setMode('signin');
+        return;
+      }
+      const { error } = await sb.auth.signInWithPassword({
+        email: email.trim(),
+        password,
+      });
+      if (error) throw error;
+      await finishSignIn();
+    } catch (err) {
+      showToast(err.message || 'Sign-in failed');
     } finally {
       setLoading(null);
     }
@@ -47,24 +114,91 @@ export function LoginScreen({ onNav }) {
               Just tell me<br/>what you spent.
             </h1>
             <p className="muted" style={{ fontSize: 15, marginTop: 14, lineHeight: 1.5 }}>
-              No spreadsheets. No categories to memorize. Snap turns every chat into a tax‑ready record.
+              Sign in to save your spending. Every chat becomes a tax-ready record — yours alone.
             </p>
           </div>
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          <div className="center muted tiny" style={{ marginBottom: 4 }}>
-            Welcome! Log in or sign up to begin.
-          </div>
-          <button className="btn btn--primary btn--block btn--lg" disabled={!!loading} onClick={() => signIn('apple')}>
-            <I.apple /> {loading === 'apple' ? 'Signing in…' : 'Continue with Apple'}
-          </button>
-          <button className="btn btn--ghost btn--block btn--lg" disabled={!!loading} onClick={() => signIn('google')} style={{ background: '#fff', border: '1.5px solid #e4eaf1' }}>
-            <I.google /> {loading === 'google' ? 'Signing in…' : 'Continue with Google'}
-          </button>
-          <button className="btn btn--block" disabled={!!loading} onClick={() => signIn('email')} style={{ background: 'transparent', color: '#5a6f87', fontWeight: 600, padding: '10px' }}>
-            {loading === 'email' ? 'Signing in…' : 'Use email instead'}
-          </button>
+          {!showEmail ? (
+            <>
+              <button
+                className="btn btn--ghost btn--block btn--lg"
+                disabled={!!loading}
+                onClick={signInGoogle}
+                style={{ background: '#fff', border: '1.5px solid #e4eaf1' }}
+              >
+                <I.google /> {loading === 'google' ? 'Redirecting…' : 'Continue with Google'}
+              </button>
+              <button
+                className="btn btn--block"
+                disabled={!!loading}
+                onClick={() => setShowEmail(true)}
+                style={{ background: 'transparent', color: '#5a6f87', fontWeight: 600, padding: '10px' }}
+              >
+                Use email instead
+              </button>
+              {devMode && (
+                <button
+                  className="btn btn--block tiny muted"
+                  disabled={!!loading}
+                  onClick={async () => {
+                    setLoading('dev');
+                    try {
+                      const { user } = await SnapAPI.login({ provider: 'email', email: 'dev@local.test', name: 'Dev' });
+                      if (onSignedIn) onSignedIn(user);
+                    } catch (err) {
+                      showToast(err.message);
+                    } finally {
+                      setLoading(null);
+                    }
+                  }}
+                >
+                  Dev sign-in (no Supabase)
+                </button>
+              )}
+            </>
+          ) : (
+            <form onSubmit={submitEmail} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <input
+                className="composer__input"
+                type="email"
+                placeholder="Email"
+                value={email}
+                onChange={(ev) => setEmail(ev.target.value)}
+                autoComplete="email"
+                required
+              />
+              <input
+                className="composer__input"
+                type="password"
+                placeholder="Password"
+                value={password}
+                onChange={(ev) => setPassword(ev.target.value)}
+                autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
+                required
+                minLength={6}
+              />
+              <button type="submit" className="btn btn--primary btn--block btn--lg" disabled={!!loading}>
+                {loading === 'email' ? 'Please wait…' : mode === 'signup' ? 'Create account' : 'Sign in'}
+              </button>
+              <button
+                type="button"
+                className="btn btn--block"
+                style={{ background: 'transparent', color: '#5a6f87', fontWeight: 600 }}
+                onClick={() => setMode(mode === 'signup' ? 'signin' : 'signup')}
+              >
+                {mode === 'signup' ? 'Already have an account? Sign in' : 'New here? Create account'}
+              </button>
+              <button
+                type="button"
+                className="btn btn--block tiny muted"
+                onClick={() => setShowEmail(false)}
+              >
+                Back
+              </button>
+            </form>
+          )}
           <div className="tiny muted center" style={{ marginTop: 6, lineHeight: 1.5 }}>
             By continuing you agree to our Terms & Privacy.
           </div>
@@ -86,11 +220,7 @@ export function NotificationsScreen({ onNav }) {
         const { notifications } = await SnapAPI.getNotifications();
         if (!cancelled) setItems(notifications);
       } catch (_) {
-        if (!cancelled) {
-          setItems([
-            { mood: 'wow', title: "You're $340 from your savings goal!", sub: 'Tap to see how', time: '2m', mint: true },
-          ]);
-        }
+        if (!cancelled) setItems([]);
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -118,6 +248,11 @@ export function NotificationsScreen({ onNav }) {
       <div className="screen-scroll" style={{ padding: '0 18px 24px' }}>
         {loading ? (
           <div className="center muted" style={{ padding: 40 }}>Loading…</div>
+        ) : items.length === 0 ? (
+          <div className="center muted" style={{ padding: 48, lineHeight: 1.5 }}>
+            <Snap size={48} mood="happy" />
+            <p style={{ marginTop: 16 }}>No notifications yet.<br/>Snap will notify you about tax wins here.</p>
+          </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {items.map((it, i) => (

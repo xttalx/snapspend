@@ -25,7 +25,7 @@ async function buildContext(userId) {
   const { expenses } = await store.getExpenses(userId, 'All');
   const recent = expenses.slice(0, 6).map((e) => `${e.vendor} ${e.amt} (${e.cat})`).join('; ');
   return {
-    userName: user?.name || 'Alex',
+    userName: user?.name || 'there',
     employment: user?.employment || '1099',
     industry: user?.industry || 'Creator',
     federalEstimate: tax.federalEstimate,

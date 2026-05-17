@@ -1,3 +1,5 @@
+import { getSupabase, initSupabase } from '../lib/supabase';
+
 const TOKEN_KEY = 'snapspend_token';
 
 function baseUrl() {
@@ -37,25 +39,58 @@ async function request(path, options = {}) {
   return data;
 }
 
+let authConfig = null;
+
 export const SnapAPI = {
   getToken,
   setToken,
-  async ensureAuth() {
-    if (!getToken()) {
-      const data = await request('/api/auth/login', {
-        method: 'POST',
-        body: JSON.stringify({ provider: 'demo' }),
-      });
-      setToken(data.token);
+
+  async getAuthConfig() {
+    if (authConfig) return authConfig;
+    authConfig = await request('/api/auth/config');
+    if (authConfig.supabaseUrl && authConfig.supabaseAnonKey) {
+      initSupabase(authConfig.supabaseUrl, authConfig.supabaseAnonKey);
     }
+    return authConfig;
   },
+
+  usesSupabaseAuth() {
+    return !!getSupabase();
+  },
+
+  async ensureAuth() {
+    if (getToken()) return;
+    const sb = getSupabase();
+    if (sb) {
+      const { data: { session } } = await sb.auth.getSession();
+      if (session?.access_token) {
+        setToken(session.access_token);
+        return;
+      }
+    }
+    throw new Error('Not signed in');
+  },
+
   health: () => request('/api/health'),
+
+  async syncSession() {
+    await this.ensureAuth();
+    return request('/api/auth/session', { method: 'POST', body: '{}' });
+  },
+
+  /** Dev only — when Supabase is not configured */
   login: async (body = {}) => {
     const data = await request('/api/auth/login', { method: 'POST', body: JSON.stringify(body) });
     setToken(data.token);
     return data;
   },
-  logout: () => setToken(null),
+
+  async logout() {
+    const sb = getSupabase();
+    if (sb) await sb.auth.signOut();
+    setToken(null);
+  },
+
   me: () => request('/api/me'),
   getProfile: () => request('/api/profile'),
   saveProfile: (body) => request('/api/profile', { method: 'PUT', body: JSON.stringify(body) }),

@@ -33,59 +33,37 @@ async function findUser(userId) {
   return mapProfile(data);
 }
 
-async function seedDemoData(userId) {
+async function ensureProfile(authUser) {
   const sb = getSupabase();
-  const { count } = await sb.from('expenses').select('*', { count: 'exact', head: true }).eq('user_id', userId);
-  if (count > 0) return;
+  const id = authUser.id;
+  const email = authUser.email || null;
+  const name =
+    authUser.user_metadata?.full_name
+    || authUser.user_metadata?.name
+    || (email ? email.split('@')[0] : 'User');
+  const provider = authUser.app_metadata?.provider || 'email';
 
-  const expenses = [
-    { user_id: userId, vendor: 'Staples', category: 'Office supplies', amount: 62.8, deductible: true, type: 'receipt' },
-    { user_id: userId, vendor: 'Adobe Sub', category: 'Software', amount: 20.99, deductible: true, type: 'subscription' },
-    { user_id: userId, vendor: 'Client lunch', category: 'Meals (50%)', amount: 45, deductible: true, type: 'meal' },
-    { user_id: userId, vendor: 'Coffee', category: 'Personal', amount: 5.4, deductible: false, type: 'other' },
-  ];
-  await sb.from('expenses').insert(expenses);
-  await sb.from('mileage_trips').insert({
-    user_id: userId,
-    from_place: 'Home',
-    to_place: 'Airport (SFO)',
-    miles: 18.4,
-    duration_min: 24,
-    purpose: 'Client meeting',
-    status: 'active',
-  });
-  await sb.from('notifications').insert([
-    { user_id: userId, mood: 'wow', title: "You're $340 from your savings goal!", sub: 'Tap to see how', time_label: '2m', mint: true },
-    { user_id: userId, mood: 'happy', title: 'Tax estimate updated', sub: 'Check your dashboard', time_label: '1d' },
-  ]);
+  const { data: existing, error: findErr } = await sb.from('profiles').select('*').eq('id', id).maybeSingle();
+  if (findErr) throw findErr;
+  if (existing) return mapProfile(existing);
+
+  const { data: created, error } = await sb.from('profiles').insert({
+    id,
+    email,
+    name,
+    auth_provider: provider,
+  }).select().single();
+
+  if (error) {
+    const { data: retry } = await sb.from('profiles').select('*').eq('id', id).maybeSingle();
+    if (retry) return mapProfile(retry);
+    throw error;
+  }
+  return mapProfile(created);
 }
 
 async function findOrCreateUser({ provider, name, email }) {
-  const sb = getSupabase();
-  const loginEmail = email || `${provider}-${Date.now()}@snapspend.local`;
-
-  let { data: existing } = await sb.from('profiles').select('*').eq('email', loginEmail).maybeSingle();
-
-  if (!existing && provider === 'demo') {
-    const { data: demo } = await sb.from('profiles').select('*').eq('email', 'alex@demo.snapspend.app').maybeSingle();
-    existing = demo;
-  }
-
-  if (!existing) {
-    const { data: created, error } = await sb.from('profiles').insert({
-      name: name || 'Alex',
-      email: loginEmail,
-      auth_provider: provider,
-    }).select().single();
-    if (error) throw error;
-    existing = created;
-    await seedDemoData(existing.id);
-  } else if (name && name !== existing.name) {
-    const { data: updated } = await sb.from('profiles').update({ name }).eq('id', existing.id).select().single();
-    existing = updated || existing;
-  }
-
-  return mapProfile(existing);
+  throw new Error('Use Supabase Auth — sign in from the app');
 }
 
 async function updateProfile(userId, data) {
@@ -294,7 +272,6 @@ async function computeTaxSummary(userId) {
     if (e.category.includes('Meal')) return s + amount * 0.5;
     return s + amount;
   }, 0);
-  const liability = Math.max(12000, Math.round(14500 - writeOffs * 0.22));
   const saved = Math.round(writeOffs * 0.22);
   const breakdown = {};
   for (const e of expenses) {
@@ -306,15 +283,17 @@ async function computeTaxSummary(userId) {
   const breakdownList = Object.entries(breakdown)
     .map(([cat, amt]) => ({ cat, amt: Math.round(amt) }))
     .sort((a, b) => b.amt - a.amt);
-  const organizedPct = Math.min(99, 70 + Math.floor(expenses.length * 2));
+  const count = expenses.length;
+  const organizedPct = count === 0 ? 0 : Math.min(99, 70 + Math.floor(count * 2));
 
   return {
-    federalEstimate: liability,
+    federalEstimate: count === 0 ? 0 : Math.max(0, Math.round(14500 - writeOffs * 0.22)),
     writeOffs: Math.round(writeOffs),
     taxSaved: saved,
     organizedPct,
-    greyFlags: 5,
+    greyFlags: count === 0 ? 0 : Math.min(5, Math.max(1, 5 - Math.floor(count / 3))),
     breakdown: breakdownList,
+    isEmpty: count === 0,
   };
 }
 
@@ -338,6 +317,7 @@ module.exports = {
   MILE_RATE,
   formatExpenseDate,
   findUser,
+  ensureProfile,
   findOrCreateUser,
   updateProfile,
   getExpenses,
