@@ -2,6 +2,7 @@ const express = require('express');
 const store = require('./store');
 const { signToken, verifySupabaseToken, resolveUserId, isSupabaseAuth } = require('./auth');
 const { isConfigured } = require('./supabase');
+const { supabaseUrl, supabaseAnonKey } = require('./env');
 const { homeChatReply, askChatReply, mockScanReceipt } = require('./services/chat');
 const anthropic = require('./services/anthropic');
 
@@ -38,12 +39,18 @@ router.get('/health', (_req, res) => {
 });
 
 router.get('/auth/config', (_req, res) => {
-  const url = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || '';
-  const anonKey = process.env.VITE_SUPABASE_ANON_KEY || '';
+  const url = supabaseUrl();
+  const anonKey = supabaseAnonKey();
+  const serverOk = isConfigured();
   res.json({
-    supabase: !!(url && anonKey && isConfigured()),
+    supabase: !!(url && anonKey && serverOk),
     supabaseUrl: url || null,
     supabaseAnonKey: anonKey || null,
+    hint: serverOk && !anonKey
+      ? 'Set VITE_SUPABASE_ANON_KEY (anon/public key) in Vercel env vars'
+      : !serverOk
+        ? 'Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in Vercel env vars'
+        : null,
   });
 });
 

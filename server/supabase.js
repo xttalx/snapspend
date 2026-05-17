@@ -1,17 +1,18 @@
 const { createClient } = require('@supabase/supabase-js');
+const { supabaseUrl, supabaseServiceRoleKey } = require('./env');
 
 let client = null;
 
 function isConfigured() {
-  return !!(process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY);
+  return !!(supabaseUrl() && supabaseServiceRoleKey());
 }
 
 function getSupabase() {
   if (!isConfigured()) return null;
   if (!client) {
     client = createClient(
-      process.env.SUPABASE_URL,
-      process.env.SUPABASE_SERVICE_ROLE_KEY,
+      supabaseUrl(),
+      supabaseServiceRoleKey(),
       { auth: { persistSession: false, autoRefreshToken: false } }
     );
   }

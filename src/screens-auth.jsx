@@ -10,10 +10,12 @@ export function LoginScreen({ onNav, onSignedIn }) {
   const [email, setEmail] = React.useState('');
   const [password, setPassword] = React.useState('');
   const [devMode, setDevMode] = React.useState(false);
+  const [configHint, setConfigHint] = React.useState(null);
 
   React.useEffect(() => {
     SnapAPI.getAuthConfig().then((cfg) => {
       setDevMode(!cfg.supabase);
+      setConfigHint(cfg.hint || null);
     });
   }, []);
 
@@ -47,16 +49,10 @@ export function LoginScreen({ onNav, onSignedIn }) {
     e.preventDefault();
     const sb = getSupabase();
     if (!sb) {
-      setLoading('email');
-      try {
-        const { user } = await SnapAPI.login({ provider: 'email', email, name: email.split('@')[0] });
-        if (onSignedIn) onSignedIn(user);
-        else onNav('home');
-      } catch (err) {
-        showToast(err.message || 'Sign-in failed');
-      } finally {
-        setLoading(null);
-      }
+      showToast(
+        configHint
+          || 'Sign-in is not configured. Add VITE_SUPABASE_ANON_KEY on Vercel and redeploy.'
+      );
       return;
     }
 
@@ -198,6 +194,11 @@ export function LoginScreen({ onNav, onSignedIn }) {
                 Back
               </button>
             </form>
+          )}
+          {configHint && (
+            <div className="tiny center" style={{ marginTop: 8, lineHeight: 1.5, color: '#c44' }}>
+              {configHint}
+            </div>
           )}
           <div className="tiny muted center" style={{ marginTop: 6, lineHeight: 1.5 }}>
             By continuing you agree to our Terms & Privacy.
