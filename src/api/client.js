@@ -1,4 +1,4 @@
-import { getSupabase, initSupabase } from '../lib/supabase';
+import { getSupabase, initSupabase, readSupabaseEnv } from '../lib/supabase';
 
 const TOKEN_KEY = 'snapspend_token';
 
@@ -47,6 +47,12 @@ export const SnapAPI = {
 
   async getAuthConfig() {
     if (authConfig) return authConfig;
+
+    const local = readSupabaseEnv();
+    if (local.url && local.key) {
+      initSupabase(local.url, local.key);
+    }
+
     authConfig = await request('/api/auth/config');
     if (authConfig.supabaseUrl && authConfig.supabaseAnonKey) {
       initSupabase(authConfig.supabaseUrl, authConfig.supabaseAnonKey);

@@ -11,6 +11,7 @@ function first(...keys) {
 function supabaseUrl() {
   return first(
     'SUPABASE_URL',
+    'NEXT_PUBLIC_SUPABASE_URL',
     'VITE_SUPABASE_URL',
     'REACT_APP_SUPABASE_URL',
   );
@@ -29,6 +30,7 @@ function supabaseAnonKey() {
   const legacy = first('SUPABASE_ANON_KEY', 'VITE_SUPABASE_ANON_KEY_LEGACY');
   if (legacy.startsWith('eyJ')) return legacy;
   return first(
+    'NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY',
     'VITE_SUPABASE_ANON_KEY',
     'REACT_APP_SUPABASE_PUBLISHABLE_KEY',
     'SUPABASE_PUBLISHABLE_KEY',

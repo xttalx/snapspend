@@ -3,6 +3,8 @@ import react from '@vitejs/plugin-react';
 
 export default defineConfig({
   plugins: [react()],
+  // Accept Supabase dashboard / Next.js-style env names in Vite
+  envPrefix: ['VITE_', 'NEXT_PUBLIC_', 'REACT_APP_'],
   server: {
     port: 5173,
     proxy: {
