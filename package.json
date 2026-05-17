@@ -8,8 +8,7 @@
     "dev:web": "vite",
     "build": "vite build",
     "start": "node server/index.js",
-    "preview": "vite preview",
-    "patch:exports": "node scripts/patch-exports.mjs"
+    "preview": "vite preview"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.49.1",

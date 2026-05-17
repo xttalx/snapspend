@@ -39,8 +39,7 @@ git push -u origin main
 
 ## Step 4 — Use the app
 
-- **App:** `https://YOUR_APP.vercel.app/?mode=app`
-- **Design board:** `https://YOUR_APP.vercel.app/`
+- **App:** `https://YOUR_APP.vercel.app/`
 
 ## Local development
 
@@ -52,5 +51,5 @@ npm install
 npm run dev
 ```
 
-- Web: http://localhost:5173/?mode=app  
+- Web: http://localhost:5173/
 - API: http://localhost:3456/api/health  

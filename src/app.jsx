@@ -1,10 +1,6 @@
 import React from 'react';
 import { SnapAPI } from './api/client';
 import { Snap, Phone } from './mascot';
-import { DesignCanvas, DCSection, DCArtboard } from './design-canvas';
-import {
-  useTweaks, TweaksPanel, TweakSection, TweakRadio, TweakText, TweakColor,
-} from './tweaks-panel';
 import { HomeScreen } from './home';
 import { LoginScreen, NotificationsScreen } from './screens-auth';
 import { ScanScreen, MileageScreen } from './screens-capture';
@@ -12,27 +8,16 @@ import {
   ExpensesScreen, ProfileScreen, TaxesScreen, ExportScreen, AskScreen,
 } from './screens-tax';
 
-const TWEAK_DEFAULTS = {
-  homeVariant: 'hybrid',
-  userName: 'Alex',
-  mintAccent: '#3ddc97',
-};
+const HOME_VARIANT = 'hybrid';
 
-const IS_APP_MODE = new URLSearchParams(window.location.search).get('mode') === 'app';
-
-function PhoneArtboard({ initial, t, dark }) {
+function PhoneShell({ initial, userName }) {
   const [route, setRoute] = React.useState(initial);
   const nav = (to) => setRoute(to);
-  const userName = t?.userName || 'Alex';
-  const homeVariant = t?.homeVariant || 'hybrid';
 
-  const ScreenForRoute = ({ which }) => {
-    switch (which) {
+  const screen = (() => {
+    switch (route) {
       case 'login': return <LoginScreen onNav={nav} />;
-      case 'home': return <HomeScreen variant={homeVariant} onNav={nav} userName={userName} />;
-      case 'home-chat': return <HomeScreen variant="chat" onNav={nav} userName={userName} />;
-      case 'home-hybrid': return <HomeScreen variant="hybrid" onNav={nav} userName={userName} />;
-      case 'home-dock': return <HomeScreen variant="dock" onNav={nav} userName={userName} />;
+      case 'home': return <HomeScreen variant={HOME_VARIANT} onNav={nav} userName={userName} />;
       case 'scan': return <ScanScreen onNav={nav} />;
       case 'mileage': return <MileageScreen onNav={nav} />;
       case 'expenses': return <ExpensesScreen onNav={nav} />;
@@ -41,30 +26,26 @@ function PhoneArtboard({ initial, t, dark }) {
       case 'export': return <ExportScreen onNav={nav} />;
       case 'ask': return <AskScreen onNav={nav} />;
       case 'notifications': return <NotificationsScreen onNav={nav} />;
-      default: return <HomeScreen variant={homeVariant} onNav={nav} userName={userName} />;
+      default: return <HomeScreen variant={HOME_VARIANT} onNav={nav} userName={userName} />;
     }
-  };
+  })();
 
   return (
-    <Phone dark={route === 'scan' || dark}>
-      <ScreenForRoute which={route} />
+    <Phone dark={route === 'scan'}>
+      {screen}
     </Phone>
   );
 }
 
-function SnapApp() {
-  const [t, setTweak] = useTweaks(TWEAK_DEFAULTS);
+export default function App() {
   const [ready, setReady] = React.useState(false);
   const [apiOk, setApiOk] = React.useState(false);
+  const [userName, setUserName] = React.useState('Alex');
 
   React.useEffect(() => {
     document.body.classList.add('app-preview');
     return () => document.body.classList.remove('app-preview');
   }, []);
-
-  React.useEffect(() => {
-    document.documentElement.style.setProperty('--mint', t.mintAccent);
-  }, [t.mintAccent]);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -73,11 +54,11 @@ function SnapApp() {
         await SnapAPI.health();
         if (!cancelled) setApiOk(true);
         if (!SnapAPI.getToken()) {
-          const { user } = await SnapAPI.login({ provider: 'demo', name: t.userName });
-          if (!cancelled && user?.name) setTweak('userName', user.name);
+          const { user } = await SnapAPI.login({ provider: 'demo', name: userName });
+          if (!cancelled && user?.name) setUserName(user.name);
         } else {
           const { user } = await SnapAPI.me();
-          if (!cancelled && user?.name) setTweak('userName', user.name);
+          if (!cancelled && user?.name) setUserName(user.name);
         }
       } catch (e) {
         console.warn('API unavailable', e);
@@ -100,97 +81,7 @@ function SnapApp() {
   return (
     <div className="app-preview__frame">
       {apiOk && <div className="app-preview__badge">API connected</div>}
-      <PhoneArtboard initial="login" t={t} />
+      <PhoneShell initial="login" userName={userName} />
     </div>
   );
-}
-
-function DesignBoardApp() {
-  const [t, setTweak] = useTweaks(TWEAK_DEFAULTS);
-
-  React.useEffect(() => {
-    document.documentElement.style.setProperty('--mint', t.mintAccent);
-    SnapAPI.ensureAuth().catch(() => {});
-  }, [t.mintAccent]);
-
-  return (
-    <>
-      <DesignCanvas>
-        <DCSection id="entry" title="01 · Entry" subtitle="Welcome + sign-in. Snap introduces himself.">
-          <DCArtboard id="login" label="Login" width={360} height={760}>
-            <PhoneArtboard initial="login" t={t} />
-          </DCArtboard>
-          <DCArtboard id="notifs" label="Notifications" width={360} height={760}>
-            <PhoneArtboard initial="notifications" t={t} />
-          </DCArtboard>
-        </DCSection>
-        <DCSection id="home" title="02 · Conversational Home" subtitle="Try typing — replies hit the API. Use Tweaks for layout.">
-          <DCArtboard id="home-active" label={`Home · ${t.homeVariant}`} width={360} height={760}>
-            <PhoneArtboard initial="home" t={t} />
-          </DCArtboard>
-          <DCArtboard id="home-chat" label="Variant · Chat-only" width={360} height={760}>
-            <PhoneArtboard initial="home-chat" t={t} />
-          </DCArtboard>
-          <DCArtboard id="home-hybrid" label="Variant · Estimate card" width={360} height={760}>
-            <PhoneArtboard initial="home-hybrid" t={t} />
-          </DCArtboard>
-          <DCArtboard id="home-dock" label="Variant · Bottom dock" width={360} height={760}>
-            <PhoneArtboard initial="home-dock" t={t} />
-          </DCArtboard>
-        </DCSection>
-        <DCSection id="capture" title="03 · Capture" subtitle="Receipt scan + mileage.">
-          <DCArtboard id="scan" label="Receipt scan" width={360} height={760}>
-            <PhoneArtboard initial="scan" t={t} />
-          </DCArtboard>
-          <DCArtboard id="mileage" label="Mileage tracking" width={360} height={760}>
-            <PhoneArtboard initial="mileage" t={t} />
-          </DCArtboard>
-        </DCSection>
-        <DCSection id="review" title="04 · Review" subtitle="Expenses + tax profile.">
-          <DCArtboard id="expenses" label="Expenses" width={360} height={760}>
-            <PhoneArtboard initial="expenses" t={t} />
-          </DCArtboard>
-          <DCArtboard id="profile" label="Tax profile" width={360} height={760}>
-            <PhoneArtboard initial="profile" t={t} />
-          </DCArtboard>
-        </DCSection>
-        <DCSection id="prep" title="05 · Tax Prep & Ask" subtitle="Estimate, Q&A, export.">
-          <DCArtboard id="taxes" label="Tax estimate" width={360} height={760}>
-            <PhoneArtboard initial="taxes" t={t} />
-          </DCArtboard>
-          <DCArtboard id="ask" label="Ask Snap" width={360} height={760}>
-            <PhoneArtboard initial="ask" t={t} />
-          </DCArtboard>
-          <DCArtboard id="export" label="Export bundle" width={360} height={760}>
-            <PhoneArtboard initial="export" t={t} />
-          </DCArtboard>
-        </DCSection>
-      </DesignCanvas>
-      <TweaksPanel>
-        <TweakSection label="Home layout" />
-        <TweakRadio
-          label="Variant"
-          value={t.homeVariant}
-          options={[
-            { value: 'chat', label: 'Chat' },
-            { value: 'hybrid', label: 'Card' },
-            { value: 'dock', label: 'Dock' },
-          ]}
-          onChange={(v) => setTweak('homeVariant', v)}
-        />
-        <TweakSection label="Personalize" />
-        <TweakText label="User name" value={t.userName} onChange={(v) => setTweak('userName', v)} />
-        <TweakColor
-          label="Accent"
-          value={t.mintAccent}
-          options={['#3ddc97', '#16b977', '#ffb547', '#7a5af0', '#ff6b6b']}
-          onChange={(v) => setTweak('mintAccent', v)}
-        />
-      </TweaksPanel>
-    </>
-  );
-}
-
-export default function App() {
-  return IS_APP_MODE ? <SnapApp /> : <DesignBoardApp />;
 }

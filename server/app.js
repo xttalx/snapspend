@@ -17,7 +17,7 @@ function createApp({ staticRoot } = {}) {
 
   if (staticRoot) {
     app.use(express.static(staticRoot));
-    app.get('/', (_req, res) => res.redirect('/?mode=app'));
+    app.get('/', (_req, res) => res.redirect('/'));
   }
 
   return app;
