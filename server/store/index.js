@@ -1,9 +1,21 @@
 const { isConfigured } = require('../supabase');
-const jsonStore = require('./json-store');
-const supabaseStore = require('./supabase-store');
+
+let jsonStore = null;
+let supabaseStore = null;
+
+function getJsonStore() {
+  if (!jsonStore) jsonStore = require('./json-store');
+  return jsonStore;
+}
+
+function getSupabaseStore() {
+  if (!supabaseStore) supabaseStore = require('./supabase-store');
+  return supabaseStore;
+}
 
 function getStore() {
-  return isConfigured() ? supabaseStore : jsonStore;
+  if (isConfigured()) return getSupabaseStore();
+  return getJsonStore();
 }
 
 const storeProxy = new Proxy({}, {

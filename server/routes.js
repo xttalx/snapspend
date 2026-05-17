@@ -27,10 +27,11 @@ async function auth(req, res, next) {
 }
 
 router.get('/health', (_req, res) => {
+  const supabase = isConfigured();
   res.json({
     ok: true,
     service: 'snapspend-api',
-    database: isConfigured() ? 'supabase' : 'json',
+    database: supabase ? 'supabase' : (process.env.VERCEL ? 'none (set SUPABASE_URL on Vercel)' : 'json'),
     auth: isSupabaseAuth() ? 'supabase' : 'jwt',
     ai: anthropic.isConfigured() ? `anthropic (${anthropic.getModel()})` : 'rules-only',
   });
@@ -67,6 +68,11 @@ router.post('/auth/login', async (req, res) => {
   try {
     if (isConfigured()) {
       return res.status(400).json({ error: 'Use the app sign-in (Supabase Auth)' });
+    }
+    if (process.env.VERCEL) {
+      return res.status(503).json({
+        error: 'Server storage not available. Add SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in Vercel env settings.',
+      });
     }
     const { provider = 'email', name, email } = req.body || {};
     const user = await store.findOrCreateUser({ provider, name, email });

@@ -15,19 +15,37 @@ function seed() {
   };
 }
 
-function load() {
-  if (!fs.existsSync(DB_PATH)) {
-    const data = seed();
-    fs.writeFileSync(DB_PATH, JSON.stringify(data, null, 2));
-    return data;
+/** Vercel/serverless filesystems are read-only — use in-memory only */
+function canPersistToDisk() {
+  if (process.env.VERCEL) return false;
+  if (process.env.AWS_LAMBDA_FUNCTION_NAME) return false;
+  try {
+    fs.accessSync(path.dirname(DB_PATH), fs.constants.W_OK);
+    return true;
+  } catch {
+    return false;
   }
-  return JSON.parse(fs.readFileSync(DB_PATH, 'utf8'));
+}
+
+function load() {
+  if (!canPersistToDisk()) return seed();
+  if (!fs.existsSync(DB_PATH)) return seed();
+  try {
+    return JSON.parse(fs.readFileSync(DB_PATH, 'utf8'));
+  } catch {
+    return seed();
+  }
 }
 
 let cache = load();
 
 function persist() {
-  fs.writeFileSync(DB_PATH, JSON.stringify(cache, null, 2));
+  if (!canPersistToDisk()) return;
+  try {
+    fs.writeFileSync(DB_PATH, JSON.stringify(cache, null, 2));
+  } catch (_) {
+    /* ignore on read-only FS */
+  }
 }
 
 function formatExpenseDate(iso) {
