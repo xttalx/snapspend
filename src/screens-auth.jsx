@@ -1,6 +1,7 @@
 import React from 'react';
 import { SnapAPI, showToast } from './api/client';
 import { getSupabase } from './lib/supabase';
+import { getAuthRedirectUrl } from './lib/auth-redirect';
 import { Snap, Avatar, AppBar, I } from './mascot';
 
 export function LoginScreen({ onNav, onSignedIn }) {
@@ -34,9 +35,13 @@ export function LoginScreen({ onNav, onSignedIn }) {
     }
     setLoading('google');
     try {
+      const redirectTo = getAuthRedirectUrl();
       const { error } = await sb.auth.signInWithOAuth({
         provider: 'google',
-        options: { redirectTo: window.location.origin },
+        options: {
+          redirectTo,
+          queryParams: { access_type: 'online', prompt: 'select_account' },
+        },
       });
       if (error) throw error;
     } catch (e) {

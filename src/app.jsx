@@ -1,5 +1,5 @@
 import React from 'react';
-import { SnapAPI } from './api/client';
+import { SnapAPI, showToast } from './api/client';
 import { getSupabase } from './lib/supabase';
 import { Snap, Phone } from './mascot';
 import { HomeScreen } from './home';
@@ -60,6 +60,17 @@ export default function App() {
   React.useEffect(() => {
     document.body.classList.add('app-preview');
     return () => document.body.classList.remove('app-preview');
+  }, []);
+
+  React.useEffect(() => {
+    const oauthErr = sessionStorage.getItem('snapspend_oauth_error');
+    if (oauthErr) {
+      sessionStorage.removeItem('snapspend_oauth_error');
+      const hint = oauthErr.toLowerCase().includes('requested path is invalid')
+        ? 'Add this app URL under Supabase → Authentication → URL Configuration → Redirect URLs (e.g. http://localhost:5173/**).'
+        : oauthErr;
+      showToast(hint);
+    }
   }, []);
 
   React.useEffect(() => {

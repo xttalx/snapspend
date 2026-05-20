@@ -3,11 +3,22 @@
 ## Step 1 — Supabase database
 
 1. Create a project at [supabase.com](https://supabase.com).
-2. Open **SQL Editor** → run `supabase/migrations/001_initial.sql`.
+2. Open **SQL Editor** → run `supabase/migrations/001_initial.sql` and `002_auth_profiles.sql`.
 3. Copy from **Project Settings → API**:
    - Project URL → `SUPABASE_URL`
    - `service_role` key → `SUPABASE_SERVICE_ROLE_KEY` (server only, never expose in frontend)
-   - `anon` key → `VITE_SUPABASE_ANON_KEY`
+   - **Legacy `anon` JWT** (starts with `eyJ…`) → `VITE_SUPABASE_ANON_KEY` and `SUPABASE_ANON_KEY`  
+     (Publishable `sb_publishable_…` keys often fail for Google sign-in.)
+4. **Authentication → URL Configuration** (fixes `{"error":"requested path is invalid"}` after Google):
+   - **Site URL:** `http://localhost:5173` while developing locally, or your Vercel URL in production
+   - **Redirect URLs** — add every URL you use (wildcards allowed):
+     - `http://localhost:5173/**`
+     - `http://127.0.0.1:5173/**`
+     - `https://YOUR_APP.vercel.app/**`
+5. **Authentication → Providers → Google** — enable Google and paste Client ID / Secret from Google Cloud.
+   - In Google Cloud → OAuth client → **Authorized redirect URIs**, add only:
+     - `https://YOUR_PROJECT_REF.supabase.co/auth/v1/callback`  
+     (Not your app URL — Supabase handles the callback.)
 
 ## Step 2 — GitHub
 
@@ -33,7 +44,8 @@ git push -u origin main
 | `FRONTEND_URL` | `https://YOUR_APP.vercel.app` |
 | `CORS_ORIGIN` | Same as FRONTEND_URL |
 | `VITE_SUPABASE_URL` | Supabase URL |
-| `VITE_SUPABASE_ANON_KEY` | Anon key |
+| `VITE_SUPABASE_ANON_KEY` | Legacy anon JWT (`eyJ…`) |
+| `VITE_APP_URL` | `https://YOUR_APP.vercel.app` (must match Supabase Redirect URLs) |
 
 3. Deploy. API routes live at `/api/*` on the same domain as the app.
 
