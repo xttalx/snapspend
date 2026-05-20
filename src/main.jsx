@@ -5,6 +5,7 @@ import './styles.css';
 import { readSupabaseEnv, initSupabase, getSupabase } from './lib/supabase';
 import {
   cleanAuthParamsFromUrl,
+  exchangeOAuthCodeIfPresent,
   getOAuthErrorFromUrl,
   hasOAuthCallbackInUrl,
 } from './lib/auth-redirect';
@@ -27,13 +28,9 @@ async function bootstrapOAuth() {
   const sb = getSupabase();
   if (!sb || !hasOAuthCallbackInUrl()) return;
 
-  const params = new URLSearchParams(window.location.search);
-  const code = params.get('code');
-  if (code) {
-    const { error } = await sb.auth.exchangeCodeForSession(code);
-    if (error) {
-      sessionStorage.setItem(OAUTH_ERROR_KEY, error.message);
-    }
+  const { error } = await exchangeOAuthCodeIfPresent(sb);
+  if (error) {
+    sessionStorage.setItem(OAUTH_ERROR_KEY, error.message);
   } else {
     await sb.auth.getSession();
   }

@@ -49,11 +49,13 @@ router.get('/auth/config', (_req, res) => {
   } else if (!serverOk) {
     hint = 'Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in Vercel env vars';
   }
+  const redirectUrl = process.env.VITE_APP_URL || process.env.FRONTEND_URL || null;
   res.json({
     supabase: !!(url && anonKey && serverOk),
     supabaseUrl: url || null,
     supabaseAnonKey: anonKey || null,
     anonKeyFormat: keyInfo.format,
+    redirectUrl,
     hint,
   });
 });

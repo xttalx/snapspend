@@ -53,7 +53,16 @@ export const SnapAPI = {
       initSupabase(local.url, local.key);
     }
 
-    authConfig = await request('/api/auth/config');
+    try {
+      authConfig = await request('/api/auth/config');
+    } catch (e) {
+      authConfig = {
+        supabase: !!(local.url && local.key),
+        supabaseUrl: local.url || null,
+        supabaseAnonKey: local.key || null,
+        hint: e.message || 'API unavailable — start the server with npm run dev',
+      };
+    }
     if (authConfig.supabaseUrl && authConfig.supabaseAnonKey) {
       initSupabase(authConfig.supabaseUrl, authConfig.supabaseAnonKey);
     }
@@ -80,7 +89,14 @@ export const SnapAPI = {
   health: () => request('/api/health'),
 
   async syncSession() {
-    await this.ensureAuth();
+    if (!getToken()) {
+      const sb = getSupabase();
+      if (sb) {
+        const { data: { session } } = await sb.auth.getSession();
+        if (session?.access_token) setToken(session.access_token);
+      }
+    }
+    if (!getToken()) throw new Error('Not signed in');
     return request('/api/auth/session', { method: 'POST', body: '{}' });
   },
 
@@ -93,7 +109,7 @@ export const SnapAPI = {
 
   async logout() {
     const sb = getSupabase();
-    if (sb) await sb.auth.signOut();
+    if (sb) await sb.auth.signOut({ scope: 'local' });
     setToken(null);
   },
 

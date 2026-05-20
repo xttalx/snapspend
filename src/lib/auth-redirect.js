@@ -41,6 +41,26 @@ export function hasOAuthCallbackInUrl() {
   return !!(params.get('code') || hash.get('access_token') || hash.get('code'));
 }
 
+const EXCHANGED_KEY = 'snapspend_oauth_code_done';
+
+/** Exchange PKCE code once (React StrictMode runs bootstrap twice in dev). */
+export async function exchangeOAuthCodeIfPresent(sb) {
+  const params = new URLSearchParams(window.location.search);
+  const code = params.get('code');
+  if (!code) return { error: null };
+
+  if (sessionStorage.getItem(`${EXCHANGED_KEY}:${code}`)) {
+    await sb.auth.getSession();
+    return { error: null };
+  }
+
+  const { error } = await sb.auth.exchangeCodeForSession(code);
+  if (!error) {
+    sessionStorage.setItem(`${EXCHANGED_KEY}:${code}`, '1');
+  }
+  return { error };
+}
+
 /** Remove auth query/hash from the address bar after handling the callback. */
 export function cleanAuthParamsFromUrl() {
   if (typeof window === 'undefined') return;

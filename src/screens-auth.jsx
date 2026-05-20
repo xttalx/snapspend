@@ -1,7 +1,12 @@
 import React from 'react';
 import { SnapAPI, showToast } from './api/client';
-import { getSupabase } from './lib/supabase';
-import { getAuthRedirectUrl } from './lib/auth-redirect';
+import {
+  connectAppSession,
+  ensureSupabaseClient,
+  signInWithGoogle,
+  signInWithEmail,
+  signUpWithEmail,
+} from './lib/auth';
 import { Snap, Avatar, AppBar, I } from './mascot';
 
 export function LoginScreen({ onNav, onSignedIn }) {
@@ -10,40 +15,33 @@ export function LoginScreen({ onNav, onSignedIn }) {
   const [mode, setMode] = React.useState('signin');
   const [email, setEmail] = React.useState('');
   const [password, setPassword] = React.useState('');
+  const [name, setName] = React.useState('');
   const [devMode, setDevMode] = React.useState(false);
   const [configHint, setConfigHint] = React.useState(null);
+  const [authReady, setAuthReady] = React.useState(false);
 
   React.useEffect(() => {
-    SnapAPI.getAuthConfig().then((cfg) => {
-      setDevMode(!cfg.supabase);
-      setConfigHint(cfg.hint || null);
-    });
+    SnapAPI.getAuthConfig()
+      .then((cfg) => {
+        setDevMode(!cfg.supabase);
+        setConfigHint(cfg.hint || null);
+        setAuthReady(!!cfg.supabase);
+      })
+      .catch(() => setAuthReady(false));
   }, []);
 
-  const finishSignIn = async () => {
-    const { user } = await SnapAPI.syncSession();
+  const finishSignIn = async (result) => {
+    const user = result?.user;
+    if (!user) return;
     showToast(`Welcome, ${user.name.split(' ')[0]}!`);
     if (onSignedIn) onSignedIn(user);
     else onNav('home');
   };
 
   const signInGoogle = async () => {
-    const sb = getSupabase();
-    if (!sb) {
-      showToast('Google sign-in is not configured yet');
-      return;
-    }
     setLoading('google');
     try {
-      const redirectTo = getAuthRedirectUrl();
-      const { error } = await sb.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          redirectTo,
-          queryParams: { access_type: 'online', prompt: 'select_account' },
-        },
-      });
-      if (error) throw error;
+      await signInWithGoogle();
     } catch (e) {
       showToast(e.message || 'Google sign-in failed');
       setLoading(null);
@@ -52,37 +50,41 @@ export function LoginScreen({ onNav, onSignedIn }) {
 
   const submitEmail = async (e) => {
     e.preventDefault();
-    const sb = getSupabase();
-    if (!sb) {
-      showToast(
-        configHint
-          || 'Sign-in is not configured. Add VITE_SUPABASE_ANON_KEY on Vercel and redeploy.'
-      );
-      return;
-    }
 
     if (!email.trim() || !password) {
       showToast('Enter email and password');
       return;
     }
+    if (password.length < 6) {
+      showToast('Password must be at least 6 characters');
+      return;
+    }
 
     setLoading('email');
     try {
+      await ensureSupabaseClient();
       if (mode === 'signup') {
-        const { error } = await sb.auth.signUp({ email: email.trim(), password });
-        if (error) throw error;
-        showToast('Check your email to confirm your account, then sign in.');
-        setMode('signin');
+        const result = await signUpWithEmail(email, password, name);
+        if (result.needsEmailConfirmation) {
+          showToast('Account created! Check your email to confirm, then sign in.');
+          setMode('signin');
+          setPassword('');
+          return;
+        }
+        await finishSignIn(result);
         return;
       }
-      const { error } = await sb.auth.signInWithPassword({
-        email: email.trim(),
-        password,
-      });
-      if (error) throw error;
-      await finishSignIn();
+      const result = await signInWithEmail(email, password);
+      await finishSignIn(result);
     } catch (err) {
-      showToast(err.message || 'Sign-in failed');
+      const msg = err.message || 'Sign-in failed';
+      if (msg.toLowerCase().includes('invalid login credentials')) {
+        showToast('Wrong email or password. New user? Tap “Create account”.');
+      } else if (msg.toLowerCase().includes('email not confirmed')) {
+        showToast('Confirm your email first (check your inbox), then sign in.');
+      } else {
+        showToast(msg);
+      }
     } finally {
       setLoading(null);
     }
@@ -125,7 +127,7 @@ export function LoginScreen({ onNav, onSignedIn }) {
             <>
               <button
                 className="btn btn--ghost btn--block btn--lg"
-                disabled={!!loading}
+                disabled={!!loading || !authReady}
                 onClick={signInGoogle}
                 style={{ background: '#fff', border: '1.5px solid #e4eaf1' }}
               >
@@ -161,6 +163,16 @@ export function LoginScreen({ onNav, onSignedIn }) {
             </>
           ) : (
             <form onSubmit={submitEmail} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {mode === 'signup' && (
+                <input
+                  className="composer__input"
+                  type="text"
+                  placeholder="Your name (optional)"
+                  value={name}
+                  onChange={(ev) => setName(ev.target.value)}
+                  autoComplete="name"
+                />
+              )}
               <input
                 className="composer__input"
                 type="email"
@@ -173,14 +185,18 @@ export function LoginScreen({ onNav, onSignedIn }) {
               <input
                 className="composer__input"
                 type="password"
-                placeholder="Password"
+                placeholder="Password (6+ characters)"
                 value={password}
                 onChange={(ev) => setPassword(ev.target.value)}
                 autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
                 required
                 minLength={6}
               />
-              <button type="submit" className="btn btn--primary btn--block btn--lg" disabled={!!loading}>
+              <button
+                type="submit"
+                className="btn btn--primary btn--block btn--lg"
+                disabled={!!loading || (mode !== 'signup' && !authReady)}
+              >
                 {loading === 'email' ? 'Please wait…' : mode === 'signup' ? 'Create account' : 'Sign in'}
               </button>
               <button

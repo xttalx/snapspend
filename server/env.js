@@ -26,9 +26,19 @@ function supabaseServiceRoleKey() {
 }
 
 function supabaseAnonKey() {
-  // Legacy JWT anon (eyJ…) — most reliable for browser OAuth/sign-in
-  const legacy = first('SUPABASE_ANON_KEY', 'VITE_SUPABASE_ANON_KEY_LEGACY');
-  if (legacy.startsWith('eyJ')) return legacy;
+  const candidates = [
+    'SUPABASE_ANON_KEY',
+    'VITE_SUPABASE_ANON_KEY',
+    'VITE_SUPABASE_ANON_KEY_LEGACY',
+    'NEXT_PUBLIC_SUPABASE_ANON_KEY',
+    'NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY',
+    'REACT_APP_SUPABASE_PUBLISHABLE_KEY',
+    'SUPABASE_PUBLISHABLE_KEY',
+  ];
+  for (const name of candidates) {
+    const v = process.env[name];
+    if (v && String(v).trim().startsWith('eyJ')) return String(v).trim();
+  }
   return first(
     'NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY',
     'VITE_SUPABASE_ANON_KEY',

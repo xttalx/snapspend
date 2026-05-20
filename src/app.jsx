@@ -1,5 +1,6 @@
 import React from 'react';
 import { SnapAPI, showToast } from './api/client';
+import { connectAppSession } from './lib/auth';
 import { getSupabase } from './lib/supabase';
 import { Snap, Phone } from './mascot';
 import { HomeScreen } from './home';
@@ -94,9 +95,10 @@ export default function App() {
             }
             SnapAPI.setToken(session.access_token);
             try {
-              const { user } = await SnapAPI.syncSession();
+              const { user } = await connectAppSession();
               if (!cancelled) handleSignedIn(user);
-            } catch {
+            } catch (err) {
+              console.warn('session sync', err);
               SnapAPI.setToken(null);
               if (!cancelled) setRoute('login');
             }
@@ -105,15 +107,23 @@ export default function App() {
           const { data: { session } } = await sb.auth.getSession();
           await applySession(session);
 
-          const { data: { subscription } } = sb.auth.onAuthStateChange((_event, sess) => {
-            if (sess?.access_token) {
-              SnapAPI.setToken(sess.access_token);
-              SnapAPI.syncSession()
-                .then(({ user }) => { if (!cancelled) handleSignedIn(user); })
-                .catch(() => {});
-            } else {
+          const { data: { subscription } } = sb.auth.onAuthStateChange((event, sess) => {
+            if (event === 'INITIAL_SESSION') return;
+            if (event === 'SIGNED_OUT') {
               SnapAPI.setToken(null);
               if (!cancelled) setRoute('login');
+              return;
+            }
+            if (sess?.access_token && (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED')) {
+              SnapAPI.setToken(sess.access_token);
+              connectAppSession()
+                .then(({ user }) => { if (!cancelled) handleSignedIn(user); })
+                .catch((err) => {
+                  console.warn('auth state sync', err);
+                  if (event === 'SIGNED_IN' && !cancelled) {
+                    showToast(err.message || 'Signed in but could not load your profile');
+                  }
+                });
             }
           });
           authSub = subscription;
